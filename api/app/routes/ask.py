@@ -10,14 +10,15 @@ from __future__ import annotations
 
 import time
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sse_starlette.sse import EventSourceResponse
 
 from app.agent.context import AgentContext
 from app.agent.graph import run_agent
+from app.config import get_settings
 from app.deps import get_ctx
 from app.llm.cost import total_cost
-from app.logging_ import to_json, write_query_log
+from app.logging_ import requests_today, to_json, write_query_log
 from app.schemas import AskRequest, AskResponse
 
 router = APIRouter()
@@ -78,6 +79,14 @@ def _log(ctx: AgentContext, req: AskRequest, resp: AskResponse, retrieved_ids: l
 
 @router.post("/ask")
 def ask(req: AskRequest, ctx: AgentContext = Depends(get_ctx)):
+    # Cost guardrail for public deployments: cap total OpenAI-backed requests/day.
+    cap = get_settings().daily_request_cap
+    if cap > 0 and requests_today(ctx.conn) >= cap:
+        raise HTTPException(
+            status_code=429,
+            detail="This demo's daily request limit has been reached. Please try again tomorrow.",
+        )
+
     state, resp, retrieved_ids = _execute(ctx, req)
     _log(ctx, req, resp, retrieved_ids)
 

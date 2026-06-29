@@ -91,6 +91,22 @@ searchable immediately — pgvector's HNSW index updates on insert, no API resta
 > New seasons: the scraper defaults to the 2025 championship page; pass `--page-url` (see
 > `scripts/get_decision_docs.py --help`) for other seasons.
 
+## Deployment
+
+The stack is a single `docker compose` project, so hosting it is "clone + one secret +
+two commands" on any Ubuntu VM. [`docs/DEPLOY.md`](docs/DEPLOY.md) walks through a
+**DigitalOcean droplet** (free for ~a year via the GitHub Student Pack's $200 credit):
+
+```bash
+make prod-up        # db + api + web (web on :80), hardened compose
+make prod-migrate
+make prod-ingest
+```
+
+`docker-compose.prod.yml` hardens for public exposure: Postgres + the API are not
+published to the internet (only nginx on port 80 is), `/ask` is rate-limited per IP, and
+a `DAILY_REQUEST_CAP` puts a hard ceiling on OpenAI spend.
+
 ## Evaluation
 
 Metrics are **hand-written** in `eval/metrics.py` (recall/precision/nDCG@k, citation coverage,

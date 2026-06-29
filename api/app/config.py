@@ -49,6 +49,10 @@ class Settings(BaseSettings):
     grade_refuse_threshold: float = Field(default=0.5, validation_alias="GRADE_REFUSE_THRESHOLD")
     max_retrieval_attempts: int = Field(default=2, validation_alias="MAX_RETRIEVAL_ATTEMPTS")
 
+    # --- abuse / cost control for public deployments ---
+    # Max /ask requests per calendar day (UTC). 0 disables the cap (local/dev).
+    daily_request_cap: int = Field(default=0, validation_alias="DAILY_REQUEST_CAP")
+
     @property
     def resolved_openai_key(self) -> str:
         return self.openai_api_key or self.openai_key

@@ -38,6 +38,13 @@ def write_query_log(conn: Connection, payload: dict) -> None:
     conn.commit()
 
 
+def requests_today(conn: Connection) -> int:
+    """Count /ask requests logged since the start of the current UTC day."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT count(*) FROM query_log WHERE ts >= date_trunc('day', now())")
+        return cur.fetchone()[0]
+
+
 def aggregate_metrics(conn: Connection) -> dict:
     with conn.cursor() as cur:
         cur.execute(

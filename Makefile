@@ -1,4 +1,7 @@
-.PHONY: up down build migrate ingest ingest-sample scrape update eval eval-smoke test fmt lint logs psql
+.PHONY: up down build migrate ingest ingest-sample scrape update eval eval-smoke test fmt lint logs psql \
+	prod-up prod-down prod-migrate prod-ingest prod-logs
+
+PROD := docker compose -f docker-compose.prod.yml
 
 # Season + GP for scrape/update, e.g. `make update GP=qatar`. SEASON defaults to 2025.
 SEASON ?= 2025
@@ -73,3 +76,15 @@ logs:
 # Open a psql shell against the running db container.
 psql:
 	docker compose exec db psql -U postgres -d f1rag
+
+# --- production (single host / droplet); see docs/DEPLOY.md ---
+prod-up:
+	$(PROD) up -d --build
+prod-down:
+	$(PROD) down
+prod-migrate:
+	$(PROD) run --rm api python -m app.db.migrate
+prod-ingest:
+	$(PROD) run --rm api python -m app.ingestion.run_ingest --data /srv/data $(ARGS)
+prod-logs:
+	$(PROD) logs -f

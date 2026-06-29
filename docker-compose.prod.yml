@@ -1,0 +1,55 @@
+# Production stack for a single host (e.g. a DigitalOcean droplet).
+# Differs from the dev docker-compose.yml: no source bind-mounts (baked image),
+# the database and API are NOT published to the host (only reachable on the
+# internal network), the web server is exposed on port 80, and everything
+# restarts on failure / reboot.
+#
+# Usage on the droplet (see docs/DEPLOY.md):
+#   docker compose -f docker-compose.prod.yml up -d --build
+#   docker compose -f docker-compose.prod.yml run --rm api python -m app.db.migrate
+#   docker compose -f docker-compose.prod.yml run --rm api python -m app.ingestion.run_ingest --data /srv/data
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: f1rag
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d f1rag"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ./api
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/f1rag
+      OPENAI_KEY: ${OPENAI_KEY:-}
+      CHAT_MODEL: ${CHAT_MODEL:-gpt-4o-mini}
+      EMBED_MODEL: ${EMBED_MODEL:-openai}
+      # Cap total OpenAI-backed requests per day (defense in depth with nginx rate limit).
+      DAILY_REQUEST_CAP: ${DAILY_REQUEST_CAP:-500}
+    volumes:
+      # Corpus, read-only, for migrate/ingest. Present because you `git clone` the repo.
+      - ./data:/srv/data:ro
+    restart: unless-stopped
+    # No published host port: the web service proxies to it over the internal network.
+
+  web:
+    build: ./web
+    depends_on:
+      - api
+    ports:
+      - "80:3000"
+    restart: unless-stopped
+
+volumes:
+  pgdata: {}

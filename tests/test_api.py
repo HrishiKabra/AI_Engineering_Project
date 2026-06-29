@@ -1,6 +1,7 @@
 """API tests with the agent + DB mocked, so they run offline (no OpenAI, no live data)."""
 
 import json
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -56,6 +57,14 @@ def test_ask_non_stream(client):
 def test_ask_refusal(client):
     r = client.post("/ask", json={"question": "what's the weather?", "stream": False})
     assert r.json()["refused"] is True
+
+
+def test_ask_daily_cap_returns_429(client, monkeypatch):
+    # Simulate the daily cap being reached: cap=1, already-served-today=5 -> 429.
+    monkeypatch.setattr("app.routes.ask.get_settings", lambda: SimpleNamespace(daily_request_cap=1))
+    monkeypatch.setattr("app.routes.ask.requests_today", lambda conn: 5)
+    r = client.post("/ask", json={"question": "Why are lap times deleted?", "stream": False})
+    assert r.status_code == 429
 
 
 def test_ask_stream_sse(client):
