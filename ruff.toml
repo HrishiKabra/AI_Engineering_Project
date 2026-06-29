@@ -1,0 +1,7 @@
+# Root lint config for eval/ and tests/ (api/ has its own in api/pyproject.toml).
+line-length = 100
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501", "B008"]

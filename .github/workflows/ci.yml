@@ -1,0 +1,72 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r api/requirements.txt
+      - name: Lint
+        run: ruff check api eval tests
+      - name: Unit tests (offline, mocked LLM + DB)
+        working-directory: api
+        run: pytest
+
+  eval-gate:
+    # Real eval needs OpenAI + an ingested corpus. Run it only when the API key
+    # secret is configured; otherwise this job is skipped (PRs from forks, etc.).
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+    services:
+      db:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: f1rag
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d f1rag"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/f1rag
+      OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r api/requirements.txt
+      - name: Skip if no API key
+        id: guard
+        run: |
+          if [ -z "$OPENAI_KEY" ]; then
+            echo "no OPENAI_KEY secret — skipping eval gate"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Migrate
+        if: steps.guard.outputs.run == 'true'
+        working-directory: api
+        run: python -m app.db.migrate
+      - name: Ingest a smoke corpus (regs + penalty + first decisions)
+        if: steps.guard.outputs.run == 'true'
+        working-directory: api
+        run: |
+          python -m app.ingestion.run_ingest --data ../data --only regs
+          python -m app.ingestion.run_ingest --data ../data --only penalty
+          python -m app.ingestion.run_ingest --data ../data --only decisions --limit 60
+      - name: Eval gate (citation coverage regression floor)
+        if: steps.guard.outputs.run == 'true'
+        working-directory: api
+        run: |
+          PYTHONPATH=.:.. python -m eval.run_eval --subset smoke --no-ragas --gate citation_coverage:0.15

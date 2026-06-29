@@ -1,0 +1,47 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: f1rag
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d f1rag"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ./api
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/f1rag
+      # Pass the repo's OPENAI_KEY through; config.py exports it as OPENAI_API_KEY.
+      OPENAI_KEY: ${OPENAI_KEY:-}
+      CHAT_MODEL: ${CHAT_MODEL:-gpt-4o-mini}
+      EMBED_MODEL: ${EMBED_MODEL:-openai}
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount the corpus (FIA PDFs) read-only so ingestion runs without baking them into the image.
+      - ./data:/srv/data:ro
+      # Live-mount source + tests + eval for a fast dev loop (no rebuild on code change).
+      - ./api/app:/srv/app
+      - ./tests:/srv/tests
+      - ./eval:/srv/eval
+
+  web:
+    build: ./web
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata: {}

@@ -1,5 +1,21 @@
-# Ignore environment variables
+# Environment / secrets
 .env
 
-# Ignore Python cache
-__pycache__
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Local runtime artifacts
+runs/
+
+# Note: data/ is the corpus (FIA regulation + decision PDFs) and IS tracked.
+
+# Eval run outputs (keep the committed deliverables: grid.json, summary.md, ablation.svg)
+eval/results/eval*.json
+
+# Tooling / scratch
+.playwright-mcp/
+f1-ui-*.png
+.DS_Store

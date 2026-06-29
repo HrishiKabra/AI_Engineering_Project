@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>F1 Rule &amp; Penalty Interpreter</title>
+<style>
+  :root { --accent:#ff2e63; --bg:#0b0e14; --panel:#141a24; --line:#232b38; --muted:#8a93a2; }
+  * { box-sizing:border-box; }
+  body { font-family:system-ui,-apple-system,sans-serif; margin:0; background:var(--bg); color:#e6e6e6; }
+  .wrap { max-width:760px; margin:0 auto; padding:2.5rem 1.25rem 4rem; }
+  h1 { font-weight:700; font-size:1.6rem; margin:0 0 .25rem; }
+  p.sub { color:var(--muted); margin:0 0 1.5rem; }
+  form { display:flex; gap:.6rem; }
+  textarea { flex:1; resize:vertical; min-height:64px; padding:.8rem; border-radius:10px;
+             border:1px solid var(--line); background:var(--panel); color:#e6e6e6; font:inherit; }
+  button { padding:0 1.3rem; border:0; border-radius:10px; background:var(--accent); color:#fff;
+           font-weight:600; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+  .examples { margin:.8rem 0 0; display:flex; gap:.5rem; flex-wrap:wrap; }
+  .examples button { background:var(--panel); border:1px solid var(--line); color:var(--muted);
+                     font-weight:400; font-size:.8rem; padding:.35rem .7rem; border-radius:999px; }
+  .answer { margin-top:1.8rem; background:var(--panel); border:1px solid var(--line);
+            border-radius:12px; padding:1.2rem 1.4rem; line-height:1.55; white-space:pre-wrap; min-height:2rem; }
+  .meta { margin-top:.8rem; font-size:.8rem; color:var(--muted); display:flex; gap:1rem; flex-wrap:wrap; }
+  .badge { padding:.15rem .5rem; border-radius:6px; background:#0f1620; border:1px solid var(--line); }
+  .badge.ok { color:#46d369; } .badge.warn { color:#ffb454; }
+  .cites { margin-top:1rem; display:flex; gap:.5rem; flex-wrap:wrap; }
+  .chip { font-size:.8rem; padding:.3rem .7rem; border-radius:999px; background:#1c2533;
+          border:1px solid var(--line); cursor:help; }
+  .chip.v { border-color:#2c5; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>F1 Rule &amp; Penalty Interpreter</h1>
+  <p class="sub">Ask why a penalty was given or what an FIA sporting regulation means. Answers are grounded in the regulations + steward decisions, with verified citations.</p>
+
+  <form id="f">
+    <textarea id="q" placeholder="e.g. Why was a driver given a 10-second penalty for causing a collision?"></textarea>
+    <button id="go" type="submit">Ask</button>
+  </form>
+  <div class="examples" id="ex">
+    <button data-q="What is the penalty for an unsafe release in the pit lane?">unsafe release</button>
+    <button data-q="Why are lap times deleted for leaving the track?">track limits</button>
+    <button data-q="Why was a driver penalized for causing a collision?">collision</button>
+  </div>
+
+  <div class="answer" id="answer">Your answer will appear here.</div>
+  <div class="meta" id="meta"></div>
+  <div class="cites" id="cites"></div>
+</div>
+
+<script>
+const f = document.getElementById('f'), q = document.getElementById('q');
+const answerEl = document.getElementById('answer'), metaEl = document.getElementById('meta'), citesEl = document.getElementById('cites');
+const go = document.getElementById('go');
+
+document.getElementById('ex').addEventListener('click', e => {
+  if (e.target.dataset.q) { q.value = e.target.dataset.q; f.requestSubmit(); }
+});
+
+f.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const question = q.value.trim();
+  if (!question) return;
+  go.disabled = true; answerEl.textContent = ''; metaEl.innerHTML = ''; citesEl.innerHTML = '';
+
+  const resp = await fetch('/ask', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ question, stream:true })
+  });
+  const reader = resp.body.getReader(); const dec = new TextDecoder();
+  let buf = '';
+  while (true) {
+    const { value, done } = await reader.read(); if (done) break;
+    buf += dec.decode(value, { stream:true });
+    const events = buf.split(/\r?\n\r?\n/); buf = events.pop();
+    for (const ev of events) handleEvent(ev);
+  }
+  if (buf.trim()) handleEvent(buf);
+  go.disabled = false;
+});
+
+function handleEvent(raw) {
+  const lines = raw.split(/\r?\n/);
+  const type = (lines.find(l => l.startsWith('event:')) || '').slice(6).trim();
+  // SSE: strip exactly one leading space after 'data:'; preserve the rest (word spacing).
+  const data = lines.filter(l => l.startsWith('data:')).map(l => l.slice(5).replace(/^ /, '')).join('');
+  if (type === 'token') { if (answerEl.textContent === 'Your answer will appear here.') answerEl.textContent=''; answerEl.textContent += data; }
+  else if (type === 'citation') { addChip(JSON.parse(data)); }
+  else if (type === 'done') { renderMeta(JSON.parse(data)); }
+}
+
+function addChip(c) {
+  const el = document.createElement('span');
+  el.className = 'chip' + (c.verified ? ' v' : '');
+  el.textContent = 'Article ' + c.article_id;
+  el.title = (c.doc_subtype ? c.doc_subtype + ' — ' : '') + (c.snippet || '');
+  citesEl.appendChild(el);
+}
+
+function renderMeta(d) {
+  const v = d.verified ? '<span class="badge ok">citations verified</span>' : '<span class="badge warn">unverified citations</span>';
+  metaEl.innerHTML =
+    `<span class="badge">route: ${d.route}</span>` +
+    `<span class="badge">grade: ${d.grade}</span>` +
+    v +
+    `<span class="badge">${d.latency_ms} ms</span>` +
+    `<span class="badge">$${d.cost_usd.toFixed(4)}</span>`;
+}
+</script>
+</body>
+</html>
