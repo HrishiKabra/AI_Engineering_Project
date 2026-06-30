@@ -103,9 +103,10 @@ make prod-migrate
 make prod-ingest
 ```
 
-`docker-compose.prod.yml` hardens for public exposure: Postgres + the API are not
-published to the internet (only nginx on port 80 is), `/ask` is rate-limited per IP, and
-a `DAILY_REQUEST_CAP` puts a hard ceiling on OpenAI spend.
+`docker-compose.prod.yml` hardens for public exposure: a **Caddy** reverse proxy serves
+real HTTPS with an auto-renewing Let's Encrypt cert (`https://<your-domain>`), Postgres +
+the API + nginx are not published to the internet (only Caddy's 80/443 are), `/ask` is
+rate-limited per client IP, and a `DAILY_REQUEST_CAP` puts a hard ceiling on OpenAI spend.
 
 ## Evaluation
 

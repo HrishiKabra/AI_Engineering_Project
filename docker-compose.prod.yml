@@ -47,9 +47,25 @@ services:
     build: ./web
     depends_on:
       - api
+    restart: unless-stopped
+    # No published host port: Caddy terminates TLS and proxies to it internally.
+
+  caddy:
+    image: caddy:2-alpine
+    depends_on:
+      - web
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env to your domain, e.g. f1rules.yourname.me}
     ports:
-      - "80:3000"
+      - "80:80"     # ACME HTTP challenge + http->https redirect
+      - "443:443"   # HTTPS
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data        # persists issued certs across restarts
+      - caddy_config:/config
     restart: unless-stopped
 
 volumes:
   pgdata: {}
+  caddy_data: {}
+  caddy_config: {}

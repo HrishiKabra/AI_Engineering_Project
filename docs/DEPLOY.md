@@ -19,6 +19,19 @@ Estimated time: ~20 minutes. Estimated cost with credit: **$0**.
 > Alternative with no credit card: **Azure for Students** ($100, no card) — create an
 > Ubuntu VM there instead and skip to step 3.
 
+## 1b. Claim a free domain (for HTTPS)
+
+The stack serves a real `https://` site via Caddy, which needs a domain pointed at
+the droplet. The Student Pack includes a **free Namecheap domain** (e.g. a `.me`):
+
+1. Claim it from the pack, or use any domain you own.
+2. After you create the droplet (next step) and have its IP, add a DNS **A record**:
+   `@  ->  <DROPLET_IP>` (and optionally `www -> <DROPLET_IP>`). DNS can take a few
+   minutes to propagate.
+
+> No domain yet? You can still run everything on `http://<DROPLET_IP>` by skipping the
+> `caddy` service — but for a secure site, set the domain.
+
 ## 2. Create the droplet
 
 In DigitalOcean: **Create → Droplets**.
@@ -54,6 +67,7 @@ cat > .env <<'EOF'
 OPENAI_KEY=sk-...                 # your OpenAI key
 POSTGRES_PASSWORD=<a-long-random-string>
 DAILY_REQUEST_CAP=500             # max OpenAI-backed requests/day (caps spend)
+DOMAIN=f1rules.yourname.me        # the domain whose A record points at this droplet
 EOF
 ```
 
@@ -70,11 +84,16 @@ make prod-ingest     # parse + embed the FIA corpus (~a few minutes, ~$0.003)
 ## 5. Open the firewall + visit
 
 ```bash
-ufw allow OpenSSH && ufw allow 80/tcp && ufw --force enable
+ufw allow OpenSSH && ufw allow 80/tcp && ufw allow 443/tcp && ufw --force enable
 ```
 
-Open **`http://<DROPLET_IP>`** — the web UI. Swagger is at `http://<DROPLET_IP>/docs`,
-the dashboard at `http://<DROPLET_IP>/dashboard`.
+Once DNS has propagated, open **`https://<DOMAIN>`** — Caddy will have automatically
+obtained a Let's Encrypt certificate on first request (give it ~30s the first time).
+`http://` redirects to `https://`. Swagger is at `https://<DOMAIN>/docs`, the dashboard
+at `https://<DOMAIN>/dashboard`.
+
+> If the cert doesn't issue: confirm the A record points at the droplet IP, ports 80 and
+> 443 are open, and check `docker compose -f docker-compose.prod.yml logs caddy`.
 
 To update later: `git pull && make prod-up` (and `make prod-ingest` after new races, or
 `make update GP=<slug>` — see the README).
@@ -83,23 +102,17 @@ To update later: `git pull && make prod-up` (and `make prod-ingest` after new ra
 
 ## What's hardened for public exposure
 
-- **Postgres and the API are not published to the internet** — only the web/nginx
-  service (port 80) is. nginx proxies the API over the internal Docker network.
-- **Rate limiting:** nginx caps `/ask` at 20 requests/min per IP.
+- **HTTPS by default:** a **Caddy** reverse proxy terminates TLS with an
+  auto-provisioned, auto-renewing Let's Encrypt certificate and redirects http→https.
+  Only Caddy is exposed (ports 80/443).
+- **Postgres, the API, and nginx are not published to the internet** — they're only
+  reachable on the internal Docker network. Caddy → nginx → API.
+- **Rate limiting:** nginx caps `/ask` at 20 requests/min **per real client IP**
+  (it reads `X-Forwarded-For` from Caddy).
 - **Daily cost cap:** the app refuses `/ask` with HTTP 429 once `DAILY_REQUEST_CAP`
   requests have been served that day — a hard ceiling on OpenAI spend.
 - **Secrets** live only in `.env` on the droplet (gitignored); the DB password is
   randomized via `POSTGRES_PASSWORD`.
-
-## Optional: HTTPS with a domain
-
-`http://<IP>` works but shows "not secure". For a clean `https://` link:
-
-1. The Student Pack includes a **free Namecheap `.me` domain** (or use any domain).
-   Point an `A` record at the droplet IP.
-2. Put **Caddy** in front for automatic Let's Encrypt TLS — replace the `web` service's
-   port mapping and add a one-line `Caddyfile` (`yourdomain.com { reverse_proxy web:3000 }`).
-   Ask and I'll wire this up.
 
 ## Cost notes
 

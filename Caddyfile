@@ -1,0 +1,11 @@
+# Caddy automatically obtains + renews a Let's Encrypt certificate for $DOMAIN
+# and redirects http -> https. It reverse-proxies to the internal web (nginx)
+# service, which serves the UI and proxies the API. SSE streaming is flushed
+# through automatically.
+#
+# DOMAIN is injected from the environment (see docker-compose.prod.yml / .env).
+
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy web:3000
+}
