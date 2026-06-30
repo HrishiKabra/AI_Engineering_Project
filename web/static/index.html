@@ -3,112 +3,324 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>F1 Rule &amp; Penalty Interpreter</title>
+<title>F1 Rule & Penalty Interpreter — Race Control</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  :root { --accent:#ff2e63; --bg:#0b0e14; --panel:#141a24; --line:#232b38; --muted:#8a93a2; }
-  * { box-sizing:border-box; }
-  body { font-family:system-ui,-apple-system,sans-serif; margin:0; background:var(--bg); color:#e6e6e6; }
-  .wrap { max-width:760px; margin:0 auto; padding:2.5rem 1.25rem 4rem; }
-  h1 { font-weight:700; font-size:1.6rem; margin:0 0 .25rem; }
-  p.sub { color:var(--muted); margin:0 0 1.5rem; }
-  form { display:flex; gap:.6rem; }
-  textarea { flex:1; resize:vertical; min-height:64px; padding:.8rem; border-radius:10px;
-             border:1px solid var(--line); background:var(--panel); color:#e6e6e6; font:inherit; }
-  button { padding:0 1.3rem; border:0; border-radius:10px; background:var(--accent); color:#fff;
-           font-weight:600; cursor:pointer; }
-  button:disabled { opacity:.5; cursor:default; }
-  .examples { margin:.8rem 0 0; display:flex; gap:.5rem; flex-wrap:wrap; }
-  .examples button { background:var(--panel); border:1px solid var(--line); color:var(--muted);
-                     font-weight:400; font-size:.8rem; padding:.35rem .7rem; border-radius:999px; }
-  .answer { margin-top:1.8rem; background:var(--panel); border:1px solid var(--line);
-            border-radius:12px; padding:1.2rem 1.4rem; line-height:1.55; white-space:pre-wrap; min-height:2rem; }
-  .meta { margin-top:.8rem; font-size:.8rem; color:var(--muted); display:flex; gap:1rem; flex-wrap:wrap; }
-  .badge { padding:.15rem .5rem; border-radius:6px; background:#0f1620; border:1px solid var(--line); }
-  .badge.ok { color:#46d369; } .badge.warn { color:#ffb454; }
-  .cites { margin-top:1rem; display:flex; gap:.5rem; flex-wrap:wrap; }
-  .chip { font-size:.8rem; padding:.3rem .7rem; border-radius:999px; background:#1c2533;
-          border:1px solid var(--line); cursor:help; }
-  .chip.v { border-color:#2c5; }
+  :root{
+    --bg:#080b10; --panel:#0f141c; --panel-2:#0b1016; --inset:#0a0e14;
+    --line:#1a232f; --line-bright:#27343f;
+    --red:#e10600; --red-deep:#9c0f0b; --red-glow:rgba(225,6,0,.45);
+    --green:#27d07a;   /* personal best */
+    --purple:#b061ff;  /* session best */
+    --yellow:#ffcf33;  /* caution */
+    --text:#e9eef4; --muted:#6c7989; --dim:#46525f;
+    --display:'Chakra Petch',sans-serif; --mono:'JetBrains Mono',monospace; --body:'Inter',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--text); font-family:var(--body);
+    background-image:
+      radial-gradient(1200px 600px at 80% -10%, rgba(225,6,0,.08), transparent 60%),
+      repeating-linear-gradient(0deg, transparent 0 38px, rgba(255,255,255,.012) 38px 39px);
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- top bar ---- */
+  header.bar{
+    display:flex; align-items:center; gap:1rem; padding:.7rem 1.1rem;
+    border-bottom:1px solid var(--line); background:linear-gradient(180deg,#0c1118,#090d12);
+    position:sticky; top:0; z-index:20;
+  }
+  .brand{font-family:var(--display); font-weight:700; letter-spacing:.02em; font-size:1.02rem}
+  .brand .accent{color:var(--red)}
+  .bar .right{margin-left:auto; display:flex; gap:.4rem; align-items:center;
+    font-family:var(--mono); font-size:.66rem; letter-spacing:.12em; color:var(--dim); text-transform:uppercase}
+  .chip-flag{padding:.2rem .5rem; border:1px solid var(--line-bright); border-radius:4px; color:var(--muted)}
+
+  /* ---- layout ---- */
+  main{display:grid; grid-template-columns:230px 1fr; gap:1px; background:var(--line);
+    height:calc(100dvh - 49px)}
+  @media (max-width:760px){ main{grid-template-columns:1fr; height:auto} }
+
+  /* ---- timing tower ---- */
+  aside.tower{background:var(--panel-2); padding:1rem .9rem; overflow:auto}
+  .tower h2{font-family:var(--mono); font-size:.66rem; letter-spacing:.2em; color:var(--muted);
+    text-transform:uppercase; margin:.2rem 0 1rem; display:flex; align-items:center; gap:.5rem}
+  .tower h2::after{content:""; flex:1; height:1px; background:var(--line)}
+  .stage{display:grid; grid-template-columns:18px 1fr auto; align-items:center; gap:.6rem;
+    padding:.55rem .15rem; border-bottom:1px solid var(--line)}
+  .stage .seg{display:flex; flex-direction:column; gap:3px}
+  .stage .seg i{display:block; width:5px; height:7px; border-radius:1px; background:var(--line-bright);
+    transition:background .2s, box-shadow .2s}
+  .stage .name{font-family:var(--mono); font-size:.74rem; letter-spacing:.08em; color:var(--muted)}
+  .stage .val{font-family:var(--mono); font-size:.7rem; color:var(--dim); text-align:right}
+  .stage.active .name{color:var(--text)}
+  .stage.active .seg i{background:var(--red); box-shadow:0 0 6px var(--red-glow); animation:flick .6s infinite alternate}
+  @keyframes flick{from{opacity:.5}to{opacity:1}}
+  .stage.done .name{color:var(--text)}
+  .stage.done .seg i{background:var(--green); box-shadow:0 0 5px rgba(39,208,122,.5)}
+  .stage.done .val{color:var(--green)}
+  .stage.best .seg i{background:var(--purple); box-shadow:0 0 5px rgba(176,97,255,.5)}
+  .stage.best .val{color:var(--purple)}
+  .stage.warn .seg i{background:var(--yellow)} .stage.warn .val{color:var(--yellow)}
+  .tower .legend{margin-top:1rem; font-family:var(--mono); font-size:.6rem; line-height:1.7;
+    color:var(--dim); letter-spacing:.06em}
+  .tower .legend b{color:var(--muted); font-weight:500}
+  .corpus{margin-top:1.4rem; padding-top:1rem; border-top:1px solid var(--line)}
+  .corpus h2{font-family:var(--mono); font-size:.62rem; letter-spacing:.2em; color:var(--muted);
+    text-transform:uppercase; margin:0 0 .6rem}
+  .corpus .kv{display:flex; justify-content:space-between; align-items:baseline; gap:.5rem;
+    font-family:var(--mono); font-size:.66rem; padding:.2rem 0; color:var(--dim)}
+  .corpus .kv span{letter-spacing:.06em; text-transform:uppercase}
+  .corpus .kv b{color:var(--text); font-weight:500}
+  .corpus .kv b.live{color:var(--green)}
+
+  /* ---- chat column ---- */
+  section.chat{background:var(--panel); display:flex; flex-direction:column; min-height:0}
+  .stream{flex:1; overflow:auto; padding:1.4rem 1.3rem 1rem; display:flex; flex-direction:column; gap:1.1rem}
+  @media (max-width:760px){ .stream{height:60dvh} }
+
+  .empty{margin:auto; text-align:center; max-width:520px; padding:2rem 0}
+  .empty .big{font-family:var(--display); font-weight:700; font-size:1.7rem; line-height:1.15; margin:0 0 .5rem}
+  .empty .big .accent{color:var(--red)}
+  .empty p{color:var(--muted); font-size:.92rem; margin:.2rem 0 1.4rem}
+  .examples{display:flex; flex-wrap:wrap; gap:.5rem; justify-content:center}
+  .ex{font-family:var(--mono); font-size:.74rem; color:var(--muted); cursor:pointer;
+    border:1px solid var(--line-bright); background:var(--inset); padding:.45rem .7rem; border-radius:6px;
+    transition:border-color .15s,color .15s}
+  .ex:hover{border-color:var(--red); color:var(--text)}
+
+  .msg{display:flex; flex-direction:column; gap:.4rem; max-width:760px}
+  .msg .who{font-family:var(--mono); font-size:.62rem; letter-spacing:.18em; text-transform:uppercase; color:var(--dim)}
+  .msg.user{align-self:flex-end; align-items:flex-end}
+  .msg.user .bubble{background:#14202c; border:1px solid var(--line-bright); color:var(--text);
+    padding:.6rem .85rem; border-radius:9px 9px 2px 9px; font-size:.95rem}
+  .msg.bot .bubble{background:var(--panel-2); border:1px solid var(--line);
+    border-left:2px solid var(--red); padding:.85rem 1rem; border-radius:2px 9px 9px 2px;
+    line-height:1.6; font-size:.96rem; white-space:pre-wrap}
+  .msg.bot .bubble .cite{font-family:var(--mono); font-size:.82em; color:var(--red);
+    background:rgba(225,6,0,.08); border:1px solid rgba(225,6,0,.25); padding:0 .3em; border-radius:3px; white-space:nowrap}
+  .msg.bot.refused .bubble{border-left-color:var(--yellow)}
+  .cursor::after{content:"▋"; color:var(--red); animation:blink 1s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+
+  /* telemetry readout under an answer */
+  .telemetry{display:flex; flex-wrap:wrap; gap:.45rem; font-family:var(--mono); font-size:.68rem; margin-top:.2rem}
+  .tg{display:flex; align-items:center; gap:.35rem; border:1px solid var(--line); background:var(--inset);
+    padding:.25rem .5rem; border-radius:5px; color:var(--muted); letter-spacing:.04em}
+  .tg b{color:var(--text); font-weight:500}
+  .tg.ok{border-color:rgba(39,208,122,.4); color:var(--green)}
+  .tg.warn{border-color:rgba(255,207,51,.4); color:var(--yellow)}
+  .gradebar{width:46px; height:5px; background:var(--line-bright); border-radius:3px; overflow:hidden}
+  .gradebar i{display:block; height:100%; background:linear-gradient(90deg,var(--yellow),var(--green))}
+
+  /* sources */
+  details.sources{max-width:760px; border:1px solid var(--line); border-radius:6px; background:var(--inset); overflow:hidden}
+  details.sources summary{cursor:pointer; list-style:none; padding:.5rem .75rem; font-family:var(--mono);
+    font-size:.7rem; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); display:flex; gap:.5rem; align-items:center}
+  details.sources summary::-webkit-details-marker{display:none}
+  details.sources summary::before{content:"▸"; color:var(--red); transition:transform .15s}
+  details.sources[open] summary::before{transform:rotate(90deg)}
+  .src{padding:.6rem .8rem; border-top:1px solid var(--line); display:flex; gap:.7rem; align-items:flex-start}
+  .src .a{font-family:var(--mono); font-size:.74rem; color:var(--red); border:1px solid rgba(225,6,0,.3);
+    border-radius:4px; padding:.15rem .4rem; white-space:nowrap; flex-shrink:0}
+  .src .s{font-size:.82rem; color:var(--muted); line-height:1.45}
+  .src .s em{color:var(--dim); font-style:normal; font-family:var(--mono); font-size:.72rem; display:block; margin-bottom:.15rem; letter-spacing:.08em; text-transform:uppercase}
+
+  /* input */
+  .composer{border-top:1px solid var(--line); background:var(--panel-2); padding:.7rem .9rem}
+  .composer form{display:flex; gap:.6rem; align-items:stretch; max-width:920px; margin:0 auto}
+  .prompt{display:flex; align-items:center; flex:1; background:var(--inset); border:1px solid var(--line-bright);
+    border-radius:8px; padding:0 .7rem; transition:border-color .15s}
+  .prompt:focus-within{border-color:var(--red)}
+  .prompt .caret{font-family:var(--mono); color:var(--red); margin-right:.5rem; user-select:none}
+  .prompt textarea{flex:1; resize:none; border:0; background:transparent; color:var(--text);
+    font-family:var(--body); font-size:.95rem; padding:.75rem 0; outline:none; max-height:130px}
+  button.ask{font-family:var(--display); font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+    border:0; border-radius:8px; padding:0 1.5rem; color:#fff; cursor:pointer;
+    background:linear-gradient(180deg,var(--red),var(--red-deep)); box-shadow:0 0 18px var(--red-glow)}
+  button.ask:disabled{opacity:.45; cursor:default; box-shadow:none}
+
+  @media (prefers-reduced-motion:reduce){*{animation:none!important}}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:var(--line-bright);border-radius:6px}
+  ::-webkit-scrollbar-track{background:transparent}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>F1 Rule &amp; Penalty Interpreter</h1>
-  <p class="sub">Ask why a penalty was given or what an FIA sporting regulation means. Answers are grounded in the regulations + steward decisions, with verified citations.</p>
+<header class="bar">
+  <span class="brand">F1 RULE&nbsp;&amp;&nbsp;PENALTY <span class="accent">INTERPRETER</span></span>
+  <span class="right"><span class="chip-flag">STEWARD&nbsp;AI</span><span class="chip-flag" id="status-flag">STANDBY</span></span>
+</header>
 
-  <form id="f">
-    <textarea id="q" placeholder="e.g. Why was a driver given a 10-second penalty for causing a collision?"></textarea>
-    <button id="go" type="submit">Ask</button>
-  </form>
-  <div class="examples" id="ex">
-    <button data-q="What is the penalty for an unsafe release in the pit lane?">unsafe release</button>
-    <button data-q="Why are lap times deleted for leaving the track?">track limits</button>
-    <button data-q="Why was a driver penalized for causing a collision?">collision</button>
-  </div>
+<main>
+  <aside class="tower">
+    <h2>Pipeline</h2>
+    <div class="stage" id="st-router"><span class="seg"><i></i><i></i><i></i></span><span class="name">ROUTE</span><span class="val">—</span></div>
+    <div class="stage" id="st-retrieve"><span class="seg"><i></i><i></i><i></i></span><span class="name">RETRIEVE</span><span class="val">—</span></div>
+    <div class="stage" id="st-grade"><span class="seg"><i></i><i></i><i></i></span><span class="name">GRADE</span><span class="val">—</span></div>
+    <div class="stage" id="st-verify"><span class="seg"><i></i><i></i><i></i></span><span class="name">VERIFY</span><span class="val">—</span></div>
+    <div class="legend">
+      <div><b>How it answers.</b></div>
+      <div>route → classify the question</div>
+      <div>retrieve → hybrid search the corpus</div>
+      <div>grade → judge sufficiency</div>
+      <div>verify → check every citation</div>
+    </div>
 
-  <div class="answer" id="answer">Your answer will appear here.</div>
-  <div class="meta" id="meta"></div>
-  <div class="cites" id="cites"></div>
-</div>
+    <div class="corpus">
+      <h2>Corpus</h2>
+      <div class="kv"><span>Updated</span><b id="c-updated">—</b></div>
+      <div class="kv"><span>Coverage</span><b id="c-cover">—</b></div>
+      <div class="kv"><span>Decisions</span><b id="c-dec">—</b></div>
+    </div>
+  </aside>
+
+  <section class="chat">
+    <div class="stream" id="stream">
+      <div class="empty" id="empty">
+        <div class="big">Why was that<br><span class="accent">penalty</span> given?</div>
+        <p>Ask about any FIA sporting regulation or steward decision. Answers are grounded in the official documents, with every rule citation verified.</p>
+        <div class="examples" id="examples"></div>
+      </div>
+    </div>
+    <div class="composer">
+      <form id="form">
+        <div class="prompt">
+          <span class="caret">&gt;</span>
+          <textarea id="q" rows="1" placeholder="e.g. What is the penalty for an unsafe pit release?"></textarea>
+        </div>
+        <button class="ask" id="ask" type="submit">Ask</button>
+      </form>
+    </div>
+  </section>
+</main>
 
 <script>
-const f = document.getElementById('f'), q = document.getElementById('q');
-const answerEl = document.getElementById('answer'), metaEl = document.getElementById('meta'), citesEl = document.getElementById('cites');
-const go = document.getElementById('go');
+const EXAMPLES = [
+  "What is the penalty for exceeding the pit lane speed limit?",
+  "Can a driver change direction more than once to defend?",
+  "Why are lap times deleted for leaving the track?",
+  "What penalties apply for an unsafe pit release?",
+];
+const STAGES = ["st-router","st-retrieve","st-grade","st-verify"];
+const $ = (s,r=document)=>r.querySelector(s);
+const stream = $("#stream"), form = $("#form"), q = $("#q"), ask = $("#ask"), statusFlag = $("#status-flag");
 
-document.getElementById('ex').addEventListener('click', e => {
-  if (e.target.dataset.q) { q.value = e.target.dataset.q; f.requestSubmit(); }
-});
+const exWrap = $("#examples");
+EXAMPLES.forEach(t=>{ const b=document.createElement("button"); b.className="ex"; b.type="button"; b.textContent=t;
+  b.onclick=()=>{ q.value=t; form.requestSubmit(); }; exWrap.appendChild(b); });
 
-f.addEventListener('submit', async (e) => {
+q.addEventListener("input",()=>{ q.style.height="auto"; q.style.height=Math.min(q.scrollHeight,130)+"px"; });
+q.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); form.requestSubmit(); }});
+
+function resetTower(){ STAGES.forEach(id=>{ const s=$("#"+id); s.className="stage"; $(".val",s).textContent="—"; }); }
+let towerTimer=null;
+function runTower(){
+  resetTower(); let i=0;
+  const tick=()=>{ STAGES.forEach(id=>$("#"+id).classList.remove("active"));
+    if(i<STAGES.length){ $("#"+STAGES[i]).classList.add("active"); i++; } else { i=1; STAGES.forEach(id=>$("#"+id).classList.remove("active")); $("#"+STAGES[3]).classList.add("active"); } };
+  tick(); towerTimer=setInterval(tick,520);
+}
+function finalizeTower(d){
+  clearInterval(towerTimer);
+  STAGES.forEach(id=>$("#"+id).classList.remove("active"));
+  const set=(id,cls,val)=>{ const s=$("#"+id); s.className="stage "+cls; $(".val",s).textContent=val; };
+  set("st-router", d.route==="out_of_scope"?"warn":"done", (d.route||"—").replace("_"," "));
+  if(d.refused){ ["st-retrieve","st-grade","st-verify"].forEach(id=>{const s=$("#"+id);s.className="stage";$(".val",s).textContent="—";}); return; }
+  set("st-retrieve","done", (d.citations&&d.citations.length?d.citations.length+" src":"ok"));
+  const g=(d.grade??0); set("st-grade", g>=0.7?"best":(g>=0.5?"done":"warn"), g.toFixed(2));
+  set("st-verify", d.verified?"done":"warn", d.verified?"✓":"⚠");
+}
+
+function highlightCites(text){
+  return text.replace(/\[(Article\s+B?\d[\w.()]*)\]/g, '<span class="cite">$1</span>');
+}
+
+form.addEventListener("submit", async e=>{
   e.preventDefault();
-  const question = q.value.trim();
-  if (!question) return;
-  go.disabled = true; answerEl.textContent = ''; metaEl.innerHTML = ''; citesEl.innerHTML = '';
+  const question=q.value.trim(); if(!question) return;
+  const empty=$("#empty"); if(empty) empty.remove();
+  ask.disabled=true; statusFlag.textContent="LIVE"; statusFlag.style.color="var(--red)";
 
-  const resp = await fetch('/ask', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ question, stream:true })
-  });
-  const reader = resp.body.getReader(); const dec = new TextDecoder();
-  let buf = '';
-  while (true) {
-    const { value, done } = await reader.read(); if (done) break;
-    buf += dec.decode(value, { stream:true });
-    const events = buf.split(/\r?\n\r?\n/); buf = events.pop();
-    for (const ev of events) handleEvent(ev);
+  addMsg("user", question);
+  const bot=addMsg("bot",""); const bubble=$(".bubble",bot); bubble.classList.add("cursor");
+  q.value=""; q.style.height="auto"; scrollDown();
+  runTower();
+
+  let answer="";
+  try{
+    const resp=await fetch("/ask",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({question,stream:true})});
+    if(resp.status===429){ bubble.classList.remove("cursor"); bubble.textContent="The demo's daily request limit has been reached — please try again tomorrow."; bot.classList.add("refused"); clearInterval(towerTimer); resetTower(); return; }
+    const reader=resp.body.getReader(), dec=new TextDecoder(); let buf="";
+    while(true){ const {value,done}=await reader.read(); if(done) break;
+      buf+=dec.decode(value,{stream:true}); const evs=buf.split(/\r?\n\r?\n/); buf=evs.pop();
+      for(const ev of evs) handle(ev); }
+    if(buf.trim()) handle(buf);
+  }catch(err){ bubble.classList.remove("cursor"); bubble.textContent="Connection error — is the service running?"; clearInterval(towerTimer); resetTower(); }
+  finally{ ask.disabled=false; statusFlag.textContent="STANDBY"; statusFlag.style.color=""; }
+
+  function handle(raw){
+    const lines=raw.split(/\r?\n/);
+    const type=(lines.find(l=>l.startsWith("event:"))||"").slice(6).trim();
+    const data=lines.filter(l=>l.startsWith("data:")).map(l=>l.slice(5).replace(/^ /,"")).join("");
+    if(type==="token"){ answer+=data; bubble.textContent=answer; bubble.classList.add("cursor"); scrollDown(); }
+    else if(type==="done"){ const d=JSON.parse(data);
+      bubble.classList.remove("cursor"); bubble.innerHTML=highlightCites(answer||d.answer||"");
+      if(d.refused) bot.classList.add("refused");
+      finalizeTower(d); renderMeta(bot,d); scrollDown(); }
   }
-  if (buf.trim()) handleEvent(buf);
-  go.disabled = false;
 });
 
-function handleEvent(raw) {
-  const lines = raw.split(/\r?\n/);
-  const type = (lines.find(l => l.startsWith('event:')) || '').slice(6).trim();
-  // SSE: strip exactly one leading space after 'data:'; preserve the rest (word spacing).
-  const data = lines.filter(l => l.startsWith('data:')).map(l => l.slice(5).replace(/^ /, '')).join('');
-  if (type === 'token') { if (answerEl.textContent === 'Your answer will appear here.') answerEl.textContent=''; answerEl.textContent += data; }
-  else if (type === 'citation') { addChip(JSON.parse(data)); }
-  else if (type === 'done') { renderMeta(JSON.parse(data)); }
+function addMsg(role,text){
+  const m=document.createElement("div"); m.className="msg "+role;
+  m.innerHTML=`<div class="who">${role==="user"?"You":"Steward AI"}</div><div class="bubble"></div>`;
+  $(".bubble",m).textContent=text; stream.appendChild(m); return m;
 }
+function renderMeta(bot,d){
+  if(d.refused && d.route!=="out_of_scope"){} // refusal still shows telemetry below
+  const tel=document.createElement("div"); tel.className="telemetry";
+  const g=(d.grade??0);
+  tel.innerHTML =
+    `<span class="tg">ROUTE <b>${(d.route||"—").replace("_"," ")}</b></span>`+
+    `<span class="tg">GRADE <span class="gradebar"><i style="width:${Math.round(g*100)}%"></i></span><b>${g.toFixed(2)}</b></span>`+
+    (d.attempts?`<span class="tg">RETRIES <b>${d.attempts}</b></span>`:"")+
+    `<span class="tg ${d.verified?'ok':'warn'}">${d.verified?'✓ VERIFIED':'⚠ UNVERIFIED'}</span>`+
+    `<span class="tg">${d.latency_ms} ms</span>`+
+    `<span class="tg">$${(d.cost_usd||0).toFixed(4)}</span>`;
+  bot.appendChild(tel);
+  if(d.citations && d.citations.length){
+    const det=document.createElement("details"); det.className="sources";
+    det.innerHTML=`<summary>Sources · ${d.citations.length}</summary>`;
+    d.citations.forEach(c=>{ const row=document.createElement("div"); row.className="src";
+      row.innerHTML=`<span class="a">Art ${c.article_id}</span><div class="s"><em>${(c.doc_subtype||'document').replace(/_/g,' ')}</em>${(c.snippet||'').slice(0,240)}</div>`;
+      det.appendChild(row); });
+    bot.appendChild(det);
+  }
+}
+function scrollDown(){ stream.scrollTop=stream.scrollHeight; }
 
-function addChip(c) {
-  const el = document.createElement('span');
-  el.className = 'chip' + (c.verified ? ' v' : '');
-  el.textContent = 'Article ' + c.article_id;
-  el.title = (c.doc_subtype ? c.doc_subtype + ' — ' : '') + (c.snippet || '');
-  citesEl.appendChild(el);
-}
-
-function renderMeta(d) {
-  const v = d.verified ? '<span class="badge ok">citations verified</span>' : '<span class="badge warn">unverified citations</span>';
-  metaEl.innerHTML =
-    `<span class="badge">route: ${d.route}</span>` +
-    `<span class="badge">grade: ${d.grade}</span>` +
-    v +
-    `<span class="badge">${d.latency_ms} ms</span>` +
-    `<span class="badge">$${d.cost_usd.toFixed(4)}</span>`;
-}
+// Corpus freshness — driven by the live data, so it reflects new races automatically.
+(async function loadCorpus(){
+  try{
+    const h = await (await fetch("/health")).json();
+    const c = h.corpus || {};
+    if(c.updated){
+      const d = new Date(c.updated + "T00:00:00");
+      $("#c-updated").textContent = d.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
+      $("#c-updated").classList.add("live");
+    }
+    if(c.season_min){
+      const span = c.season_min === c.season_max ? `${c.season_min}` : `${c.season_min}–${c.season_max}`;
+      $("#c-cover").textContent = `${span} · ${c.races} GP`;
+    }
+    if(c.decisions) $("#c-dec").textContent = c.decisions.toLocaleString();
+  }catch(e){ /* offline: leave dashes */ }
+})();
 </script>
 </body>
 </html>

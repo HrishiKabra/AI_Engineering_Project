@@ -38,6 +38,37 @@ def write_query_log(conn: Connection, payload: dict) -> None:
     conn.commit()
 
 
+def corpus_status(conn: Connection) -> dict:
+    """Freshness of the ingested corpus, for the UI's 'last updated' readout.
+
+    Driven entirely by the data, so it reflects new races automatically each time
+    they're ingested (the season range + race count grow, the date advances). Season
+    coverage is scoped to steward decisions so the 2026 regulations PDF doesn't make
+    the race coverage look like it spans 2026 before any 2026 race exists.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                max(created_at)::date AS updated,
+                min(season) FILTER (WHERE doc_type = 'steward_decision') AS season_min,
+                max(season) FILTER (WHERE doc_type = 'steward_decision') AS season_max,
+                count(*) FILTER (WHERE doc_type = 'steward_decision') AS decisions,
+                count(DISTINCT (season, grand_prix))
+                    FILTER (WHERE doc_type = 'steward_decision' AND grand_prix IS NOT NULL) AS races
+            FROM documents
+            """
+        )
+        r = cur.fetchone()
+    return {
+        "updated": r[0].isoformat() if r[0] else None,
+        "season_min": r[1],
+        "season_max": r[2],
+        "decisions": r[3] or 0,
+        "races": r[4] or 0,
+    }
+
+
 def requests_today(conn: Connection) -> int:
     """Count /ask requests logged since the start of the current UTC day."""
     with conn.cursor() as cur:
