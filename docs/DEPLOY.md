@@ -124,6 +124,22 @@ live site automatically — no redeploy. Watch it with `tail -f /var/log/f1-auto
 > Note: this updates **data** only. Code/feature changes still ship via `git pull &&
 > make prod-up`.
 
+### Live watching during a race weekend
+
+For near-real-time updates *while a session is running*, poll one Grand Prix on a
+short interval and ingest documents as the stewards publish them — so an incident
+becomes answerable a minute or two after the decision is posted:
+
+```bash
+make prod-watch GP=monaco SEASON=2026 INTERVAL=120   # runs until Ctrl-C
+```
+
+It re-checks the FIA page every `INTERVAL` seconds (default 120), downloads any new
+documents, and ingests them into the live stack (idempotent — already-seen docs are
+skipped). Start it before a session and stop it (Ctrl-C) after. The FIA has no push
+API, so this is polling, not a webhook; ~1–2 min latency is the practical floor.
+(`make watch …` is the same against the local dev stack.)
+
 ---
 
 ## What's hardened for public exposure

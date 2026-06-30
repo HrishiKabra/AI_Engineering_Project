@@ -1,0 +1,6 @@
+# Prebuilt scraper image: Playwright browsers (from the base image) + the playwright
+# pip package, so `make scrape` / `make watch` don't reinstall on every run — which
+# matters for the live watcher's tight polling loop.
+FROM mcr.microsoft.com/playwright/python:v1.49.0-jammy
+RUN pip install --no-cache-dir playwright==1.49.0
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
