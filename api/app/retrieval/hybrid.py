@@ -8,6 +8,8 @@ cross-referenced context.
 
 from __future__ import annotations
 
+import re
+
 from psycopg import Connection
 
 
@@ -56,14 +58,45 @@ def detect_grand_prix(question: str) -> str | None:
     return best[1] if best else None
 
 
+_YEAR_RE = re.compile(r"\b(20\d{2})\b")
+# Queries about current standings/results with no explicit year -> default to latest season.
+_STANDINGS_RE = re.compile(
+    r"\b(championship|standings|title|leading|leader|who.?s winning|points|"
+    r"who won|current)\b",
+    re.IGNORECASE,
+)
+
+
+def detect_season(question: str) -> int | None:
+    m = _YEAR_RE.search(question)
+    return int(m.group(1)) if m else None
+
+
+def is_standings_query(question: str) -> bool:
+    return bool(_STANDINGS_RE.search(question))
+
+
+def latest_season(conn: Connection) -> int | None:
+    with conn.cursor() as cur:
+        cur.execute("SELECT max(season) FROM documents WHERE doc_type = 'steward_decision'")
+        row = cur.fetchone()
+    return row[0] if row else None
+
+
 def _filter_sql(filters: dict | None) -> tuple[str, list]:
     if not filters:
         return "", []
     clauses, params = [], []
-    for col in ("season", "doc_type"):
-        if filters.get(col) is not None:
-            clauses.append(f"d.{col} = %s")
-            params.append(filters[col])
+    if filters.get("doc_type") is not None:
+        clauses.append("d.doc_type = %s")
+        params.append(filters["doc_type"])
+    # A named season scopes race data (decisions/results/standings) to that year, but
+    # keeps the rulebook (regulations + penalty table) available regardless of season.
+    if filters.get("season") is not None:
+        clauses.append(
+            "(d.season = %s OR d.doc_type IN ('sporting_regulation', 'penalty_points'))"
+        )
+        params.append(filters["season"])
     # A named Grand Prix keeps that GP's documents AND the global regulations/penalty
     # table (grand_prix IS NULL), so rule questions that mention a GP still see the regs.
     if filters.get("grand_prix") is not None:

@@ -52,8 +52,11 @@ def router(state: AgentState, config: dict) -> AgentState:
 def retrieve(state: AgentState, config: dict) -> AgentState:
     from app.retrieval.hybrid import (
         detect_grand_prix,
+        detect_season,
         expand_to_parents,
         hybrid_retrieve,
+        is_standings_query,
+        latest_season,
     )
 
     ctx = ctx_from_config(config)
@@ -66,9 +69,18 @@ def retrieve(state: AgentState, config: dict) -> AgentState:
     # Scope to the Grand Prix named in the question (if any) so the many near-identical
     # session-result chunks from other races don't crowd retrieval. Keeps global regs.
     filters = dict(cfg.get("filters") or {})
-    gp = detect_grand_prix(state.get("query_text") or state["question"])
+    question = state["question"]
+    gp = detect_grand_prix(state.get("query_text") or question)
     if gp and "grand_prix" not in filters:
         filters["grand_prix"] = gp
+    if "season" not in filters:
+        # An explicit year scopes to that season; a bare standings/results query
+        # ("who's leading the championship") defaults to the latest season ingested.
+        season = detect_season(question)
+        if season is None and is_standings_query(question):
+            season = latest_season(ctx.conn)
+        if season:
+            filters["season"] = season
     filters = filters or None
 
     query = state["query_text"]

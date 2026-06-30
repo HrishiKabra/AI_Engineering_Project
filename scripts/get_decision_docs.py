@@ -72,12 +72,35 @@ async def _collect_pdf_links(page) -> list[dict]:
     return unique
 
 
-async def _scrape(page_url: str, gp_filter: str) -> dict[str, list[dict]]:
+async def _resolve_season_url(page, season: int) -> str | None:
+    """Find the documents URL for a season from the season dropdown."""
+    opts = await page.eval_on_selector_all(
+        "#facetapi_select_facet_form_3 option",
+        "els => els.map(o => ({ v: o.value, t: o.textContent.trim() }))",
+    )
+    for o in opts:
+        if o["t"].strip().lower() == f"season {season}":
+            return o["v"] if o["v"].startswith("http") else urljoin(BASE_URL, o["v"])
+    return None
+
+
+async def _scrape(season: int, gp_filter: str, page_url: str | None = None) -> dict[str, list[dict]]:
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
-        print(f"Loading {page_url} ...")
-        await page.goto(page_url, wait_until="networkidle", timeout=60000)
+        start = page_url or DEFAULT_PAGE_URL
+        print(f"Loading {start} ...")
+        await page.goto(start, wait_until="networkidle", timeout=60000)
+
+        # Auto-resolve the requested season from the dropdown (unless an explicit URL given).
+        if not page_url and f"season-{season}-" not in start:
+            season_url = await _resolve_season_url(page, season)
+            if not season_url:
+                print(f"Could not find SEASON {season} in the FIA dropdown.")
+                await browser.close()
+                return {}
+            print(f"Season {season} -> {season_url}")
+            await page.goto(season_url, wait_until="networkidle", timeout=60000)
 
         options = await page.eval_on_selector_all(
             "#facetapi_select_facet_form_2 option",
@@ -152,12 +175,8 @@ def main() -> None:
     ap.add_argument("--delay", type=float, default=DELAY_BETWEEN_DOWNLOADS)
     args = ap.parse_args()
 
-    page_url = args.page_url or DEFAULT_PAGE_URL
-    if args.page_url is None and args.season != 2025:
-        raise SystemExit("For non-2025 seasons, pass --page-url for that season's FIA documents page.")
-
     gp_filter = args.gp.strip().lower()
-    by_gp = asyncio.run(_scrape(page_url, gp_filter))
+    by_gp = asyncio.run(_scrape(args.season, gp_filter, page_url=args.page_url))
 
     total = 0
     for gp_text, links in by_gp.items():

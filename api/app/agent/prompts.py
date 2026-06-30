@@ -34,6 +34,7 @@ Q: "Where did Hamilton finish at Silverstone?" -> {"route": "single_rule"}
 Q: "Why was Verstappen penalized in Austria?" -> {"route": "single_rule"}
 Q: "What's the penalty for a false start?" -> {"route": "single_rule"}
 Q: "Who is leading the drivers' championship?" -> {"route": "single_rule"}
+Q: "Which constructor is leading the 2026 championship?" -> {"route": "single_rule"}
 Q: "Which constructor won the championship?" -> {"route": "single_rule"}
 Q: "How do unsafe release penalties compare across races?" -> {"route": "precedent"}
 Q: "Who will win the championship this year?" -> {"route": "out_of_scope"}
@@ -87,8 +88,9 @@ several articles apply, cite each.
 [Article <id>] citations are allowed.
 - If the relevant sources have no article id (e.g. the decision only cites an \
 Appendix), explain the reasoning without inventing an article number.
-- For session results or championship standings (sources with no article id), do NOT \
-write any [Article ...] citation at all — just state the result/standings plainly.
+- When the answer is about who won, who is leading, finishing/grid positions, results, \
+or championship standings, state ONLY the names, positions, and points — do NOT cite \
+any [Article ...] for those facts, even if a regulation appears among the sources.
 - Do NOT speculate about a driver's intent or invent rule numbers.
 - If the sources don't actually support an answer, say you can't find a governing \
 regulation rather than guessing.
