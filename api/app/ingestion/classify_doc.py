@@ -33,7 +33,6 @@ _RESULT_SUBTYPES = {"classification", "starting_grid"}
 # Subtypes that are pure tables / administrative — store the document row but do
 # not embed (they add retrieval noise and carry no Fact/Reason narrative).
 _TABLE_ONLY_SUBTYPES = {
-    "championship_points",
     "entry_list",
     "scrutineering",
 }
@@ -79,8 +78,8 @@ def classify(source_file: str, text: str, content_hash: str) -> DocMeta:
     doc_num_match = _DOC_NUM_RE.search(name)
     document_number = doc_num_match.group(1) if doc_num_match else None
 
-    if subtype in _RESULT_SUBTYPES:
-        is_table_only = False  # parsed into ordered-result chunks by results_parser
+    if subtype in _RESULT_SUBTYPES or subtype == "championship_points":
+        is_table_only = False  # parsed into ordered-result / standings chunks
     else:
         has_narrative = bool(re.search(r"(?m)^(Fact|Infringement|Reason)\b", text))
         is_table_only = subtype in _TABLE_ONLY_SUBTYPES or not has_narrative
