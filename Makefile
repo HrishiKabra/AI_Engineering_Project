@@ -1,5 +1,6 @@
 .PHONY: up down build migrate ingest ingest-sample scraper-image scrape update watch eval eval-smoke \
-	test fmt lint logs psql prod-up prod-down prod-migrate prod-ingest prod-logs prod-update prod-watch
+	test fmt lint logs psql prod-up prod-down prod-migrate prod-ingest prod-logs prod-update prod-watch \
+	autowatch
 
 PROD := docker compose -f docker-compose.prod.yml
 
@@ -103,3 +104,7 @@ prod-update: scrape
 prod-watch: scraper-image
 	@test -n "$(GP)" || (echo "set GP=<slug>, e.g. make prod-watch GP=monaco"; exit 1)
 	GP="$(GP)" SEASON="$(SEASON)" INTERVAL="$(INTERVAL)" UPDATE_TARGET=prod-update bash scripts/watch.sh
+
+# Fully-automatic always-on watcher (adaptive; no GP needed). Run via systemd in prod.
+autowatch: scraper-image
+	bash scripts/autowatch.sh

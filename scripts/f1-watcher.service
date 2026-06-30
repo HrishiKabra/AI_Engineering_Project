@@ -1,0 +1,17 @@
+[Unit]
+Description=F1 Rule & Penalty Interpreter — automatic document watcher
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+# Adjust if you cloned the repo somewhere other than /root/f1:
+WorkingDirectory=/root/f1
+ExecStart=/root/f1/scripts/autowatch.sh
+Restart=always
+RestartSec=30
+# SEASON defaults to the current calendar year; set it here to pin a season.
+# Environment=SEASON=2026
+
+[Install]
+WantedBy=multi-user.target

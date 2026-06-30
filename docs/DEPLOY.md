@@ -105,11 +105,33 @@ at `https://<DOMAIN>/dashboard`.
 To update later: `git pull && make prod-up` (and `make prod-ingest` after new races, or
 `make update GP=<slug>` — see the README).
 
-## Automatic updates (cron)
+## Hands-off auto-update (recommended): the watcher service
 
-To keep the knowledge base current with **no manual action**, schedule the bundled
-script — it scrapes the current season's newly published FIA documents and ingests
-them (idempotent; already-seen docs are skipped). On the droplet:
+Install the always-on watcher once and never touch it again. It runs adaptively —
+polling **fast while documents are actively being published** (a session is live) and
+**backing off when quiet** — auto-starts on boot, and restarts on failure. No cron, no
+calendar, no manual start.
+
+```bash
+# from the repo on the droplet (adjust WorkingDirectory in the unit if not /root/f1):
+sudo cp scripts/f1-watcher.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now f1-watcher
+journalctl -u f1-watcher -f          # watch it work
+```
+
+That's it — new races and in-session incidents appear on the live site on their own,
+within a couple of minutes of the FIA publishing them. (The FIA has no push API, so
+this is adaptive polling, not a webhook.) It defaults to the current calendar year and
+rolls into future seasons automatically. Tunable via env in the unit file
+(`MIN_INTERVAL`, `MAX_INTERVAL`, `SEASON`).
+
+### Lighter alternatives
+
+If you'd rather not run an always-on service:
+
+**Weekly cron** — scrape + ingest once a week (good enough if you don't need in-session
+latency):
 
 ```bash
 crontab -e
