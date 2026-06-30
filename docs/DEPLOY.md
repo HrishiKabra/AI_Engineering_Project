@@ -22,15 +22,22 @@ Estimated time: ~20 minutes. Estimated cost with credit: **$0**.
 ## 1b. Claim a free domain (for HTTPS)
 
 The stack serves a real `https://` site via Caddy, which needs a domain pointed at
-the droplet. The Student Pack includes a **free Namecheap domain** (e.g. a `.me`):
+the droplet. The Student Pack includes a **free Namecheap domain** (e.g. a `.me`).
 
-1. Claim it from the pack, or use any domain you own.
-2. After you create the droplet (next step) and have its IP, add a DNS **A record**:
-   `@  ->  <DROPLET_IP>` (and optionally `www -> <DROPLET_IP>`). DNS can take a few
-   minutes to propagate.
+Recommended: claim a personal domain (e.g. `hrishikabra.me`) and host this project on a
+**subdomain** so your apex stays free for a portfolio:
 
-> No domain yet? You can still run everything on `http://<DROPLET_IP>` by skipping the
-> `caddy` service — but for a secure site, set the domain.
+1. Claim the domain from the pack (or use one you own).
+2. After you create the droplet (next step) and have its IP, add a DNS **A record** for
+   the subdomain: `f1  ->  <DROPLET_IP>` (host `f1`, value the droplet IP). This makes
+   `f1.hrishikabra.me` resolve to the droplet. DNS can take a few minutes to propagate.
+   Your apex (`hrishikabra.me`) is independent — point it wherever your portfolio lives.
+
+> Want the app at the apex instead (`hrishikabra.me` itself)? Point the `@` A record at
+> the droplet and set `DOMAIN=hrishikabra.me`. For a portfolio, the subdomain is cleaner.
+>
+> No domain yet? You can still run on `http://<DROPLET_IP>` by skipping the `caddy`
+> service — but for a secure site, set the domain.
 
 ## 2. Create the droplet
 
@@ -67,7 +74,7 @@ cat > .env <<'EOF'
 OPENAI_KEY=sk-...                 # your OpenAI key
 POSTGRES_PASSWORD=<a-long-random-string>
 DAILY_REQUEST_CAP=500             # max OpenAI-backed requests/day (caps spend)
-DOMAIN=f1rules.yourname.me        # the domain whose A record points at this droplet
+DOMAIN=f1.hrishikabra.me          # the domain whose A record points at this droplet
 EOF
 ```
 

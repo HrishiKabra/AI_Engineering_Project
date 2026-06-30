@@ -55,7 +55,7 @@ services:
     depends_on:
       - web
     environment:
-      DOMAIN: ${DOMAIN:?set DOMAIN in .env to your domain, e.g. f1rules.yourname.me}
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env to your domain, e.g. f1.hrishikabra.me}
     ports:
       - "80:80"     # ACME HTTP challenge + http->https redirect
       - "443:443"   # HTTPS
