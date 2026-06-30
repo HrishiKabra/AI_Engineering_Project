@@ -1,6 +1,15 @@
-"""Deterministic tests for Reciprocal Rank Fusion."""
+"""Deterministic tests for Reciprocal Rank Fusion + Grand Prix detection."""
 
-from app.retrieval.hybrid import rrf_fuse
+from app.retrieval.hybrid import detect_grand_prix, rrf_fuse
+
+
+def test_detect_grand_prix():
+    assert detect_grand_prix("Who won the 2025 Abu Dhabi Grand Prix?") == "abudhabi"
+    assert detect_grand_prix("what happened in Austrian GP qualifying?") == "austrian"
+    assert detect_grand_prix("who took pole at Silverstone?") == "british"
+    assert detect_grand_prix("podium at Las Vegas?") == "lasvegas"
+    # No GP named -> None (so global rule questions aren't filtered to a race).
+    assert detect_grand_prix("What is the penalty for an unsafe pit release?") is None
 
 
 def test_rrf_rewards_agreement():

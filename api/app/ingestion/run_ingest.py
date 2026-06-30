@@ -23,16 +23,20 @@ from app.ingestion.models import ChunkRow
 from app.ingestion.pdf import load_pdf
 from app.ingestion.penalty_parser import parse_penalty_points
 from app.ingestion.regs_parser import parse_regs
+from app.ingestion.results_parser import RESULT_SUBTYPES, parse_results
 from app.ingestion.upsert import upsert_chunks, upsert_document, upsert_embeddings
 from app.util import text_hash
 
 
-def _parse_document(meta_doc_type: str, text: str) -> list[ChunkRow]:
-    if meta_doc_type == "sporting_regulation":
+def _parse_document(meta, text: str, pdf_path) -> list[ChunkRow]:
+    if meta.doc_type == "sporting_regulation":
         return parse_regs(text)
-    if meta_doc_type == "penalty_points":
+    if meta.doc_type == "penalty_points":
         return parse_penalty_points(text)
-    # steward_decision
+    if meta.doc_subtype in RESULT_SUBTYPES:
+        # Timing sheets are parsed from the PDF directly (needs word coordinates).
+        return parse_results(pdf_path, meta.season, meta.grand_prix)
+    # steward_decision narrative
     _, rows = parse_decision(text)
     return rows
 
@@ -47,7 +51,9 @@ def _matches_filter(doc_type: str, only: str | None) -> bool:
     }.get(only) == doc_type
 
 
-def ingest(data_root: Path, only: str | None = None, limit: int | None = None) -> dict:
+def ingest(
+    data_root: Path, only: str | None = None, limit: int | None = None, force: bool = False
+) -> dict:
     settings = get_settings()
     embedder = get_embedder(settings)
 
@@ -66,12 +72,12 @@ def ingest(data_root: Path, only: str | None = None, limit: int | None = None) -
                 continue
             stats["seen"] += 1
 
-            doc_id, changed = upsert_document(conn, meta)
+            doc_id, changed = upsert_document(conn, meta, force=force)
             if not changed:
                 stats["skipped"] += 1
                 continue
 
-            rows = [] if meta.is_table_only else _parse_document(meta.doc_type, text)
+            rows = [] if meta.is_table_only else _parse_document(meta, text, pdf)
             chunk_ids = upsert_chunks(conn, doc_id, rows)
             stats["chunks"] += len(rows)
 
@@ -103,9 +109,10 @@ def main() -> None:
     ap.add_argument("--data", required=True, type=Path, help="corpus root, or a single race folder")
     ap.add_argument("--only", choices=["regs", "penalty", "decisions"], default=None)
     ap.add_argument("--limit", type=int, default=None)
+    ap.add_argument("--force", action="store_true", help="re-process even if unchanged")
     args = ap.parse_args()
 
-    stats = ingest(args.data, only=args.only, limit=args.limit)
+    stats = ingest(args.data, only=args.only, limit=args.limit, force=args.force)
     print("\n=== ingestion summary ===")
     for k, v in stats.items():
         print(f"  {k}: {v}")

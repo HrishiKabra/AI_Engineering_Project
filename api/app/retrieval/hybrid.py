@@ -17,14 +17,58 @@ def _vec_literal(vec: list[float]) -> str:
     return "[" + ",".join(repr(float(x)) for x in vec) + "]"
 
 
+# Aliases -> canonical grand_prix slug (matches data/decision_docs/<season>_<slug>).
+_GP_ALIASES: dict[str, str] = {
+    "australia": "australian", "australian": "australian", "melbourne": "australian",
+    "china": "chinese", "chinese": "chinese", "shanghai": "chinese",
+    "japan": "japanese", "japanese": "japanese", "suzuka": "japanese",
+    "bahrain": "bahrain", "sakhir": "bahrain",
+    "saudi": "saudiarabian", "saudi arabian": "saudiarabian", "jeddah": "saudiarabian",
+    "miami": "miami",
+    "emilia": "emiliaromagna", "imola": "emiliaromagna", "emilia romagna": "emiliaromagna",
+    "monaco": "monaco", "monte carlo": "monaco",
+    "spain": "spanish", "spanish": "spanish", "barcelona": "spanish", "catalunya": "spanish",
+    "canada": "canadian", "canadian": "canadian", "montreal": "canadian",
+    "austria": "austrian", "austrian": "austrian", "red bull ring": "austrian", "spielberg": "austrian",
+    "britain": "british", "british": "british", "silverstone": "british", "great britain": "british",
+    "belgium": "belgian", "belgian": "belgian", "spa": "belgian", "francorchamps": "belgian",
+    "hungary": "hungarian", "hungarian": "hungarian", "hungaroring": "hungarian", "budapest": "hungarian",
+    "netherlands": "dutch", "dutch": "dutch", "zandvoort": "dutch",
+    "italy": "italian", "italian": "italian", "monza": "italian",
+    "azerbaijan": "azerbaijan", "baku": "azerbaijan",
+    "singapore": "singapore", "marina bay": "singapore",
+    "united states": "unitedstates", "austin": "unitedstates", "cota": "unitedstates", "american": "unitedstates",
+    "mexico": "mexicocity", "mexican": "mexicocity", "mexico city": "mexicocity",
+    "brazil": "saopaulo", "brazilian": "saopaulo", "sao paulo": "saopaulo", "interlagos": "saopaulo",
+    "las vegas": "lasvegas", "vegas": "lasvegas",
+    "qatar": "qatar", "losail": "qatar", "lusail": "qatar",
+    "abu dhabi": "abudhabi", "yas marina": "abudhabi",
+}
+
+
+def detect_grand_prix(question: str) -> str | None:
+    """Return the canonical GP slug named in a question, if any (longest alias wins)."""
+    q = question.lower()
+    best = None
+    for alias, slug in _GP_ALIASES.items():
+        if alias in q and (best is None or len(alias) > len(best[0])):
+            best = (alias, slug)
+    return best[1] if best else None
+
+
 def _filter_sql(filters: dict | None) -> tuple[str, list]:
     if not filters:
         return "", []
     clauses, params = [], []
-    for col in ("season", "grand_prix", "doc_type"):
+    for col in ("season", "doc_type"):
         if filters.get(col) is not None:
             clauses.append(f"d.{col} = %s")
             params.append(filters[col])
+    # A named Grand Prix keeps that GP's documents AND the global regulations/penalty
+    # table (grand_prix IS NULL), so rule questions that mention a GP still see the regs.
+    if filters.get("grand_prix") is not None:
+        clauses.append("(d.grand_prix = %s OR d.grand_prix IS NULL)")
+        params.append(filters["grand_prix"])
     where = (" AND " + " AND ".join(clauses)) if clauses else ""
     return where, params
 

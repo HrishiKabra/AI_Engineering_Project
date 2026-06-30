@@ -21,8 +21,11 @@ def count_tokens(text: str) -> int:
     return len(_encoder().encode(text))
 
 
-def upsert_document(conn: Connection, meta: DocMeta) -> tuple[int, bool]:
+def upsert_document(conn: Connection, meta: DocMeta, force: bool = False) -> tuple[int, bool]:
     """Insert/update a document. Returns (document_id, changed).
+
+    ``force`` re-processes even when the content hash is unchanged (used to re-chunk
+    the whole corpus after a parser change, without dropping the database).
 
     ``changed`` is False when the document is already present with an identical
     content_hash (re-ingest skip). When the hash differs the old chunks are
@@ -57,7 +60,7 @@ def upsert_document(conn: Connection, meta: DocMeta) -> tuple[int, bool]:
 
         if existing:
             doc_id, old_hash = existing
-            if old_hash == meta.content_hash:
+            if old_hash == meta.content_hash and not force:
                 return doc_id, False
             cur.execute("DELETE FROM chunks WHERE document_id = %s", (doc_id,))
             cur.execute(

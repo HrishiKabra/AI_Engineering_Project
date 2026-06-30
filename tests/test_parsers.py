@@ -101,8 +101,17 @@ def test_classify_decision_metadata():
     assert meta.is_table_only is False
 
 
-def test_classify_table_only_doc():
+def test_classify_classification_is_parsed_not_skipped():
+    # Classification/result docs are now parsed into ordered-result chunks, not skipped.
     src = "data/decision_docs/2025_british/002_Doc 51 - Final Race Classification.pdf"
     meta = classify(src, "LAPS TIME NO DRIVER\n52 1:37 4 NORRIS", content_hash="xyz")
     assert meta.doc_subtype == "classification"
+    assert meta.is_table_only is False
+
+
+def test_classify_true_table_only_doc():
+    # Genuinely table-only / administrative docs are still skipped from embedding.
+    src = "data/decision_docs/2025_british/050_Doc 7 - Entry List.pdf"
+    meta = classify(src, "NO DRIVER ENTRANT\n4 Lando NORRIS McLaren", content_hash="xyz")
+    assert meta.doc_subtype == "entry_list"
     assert meta.is_table_only is True

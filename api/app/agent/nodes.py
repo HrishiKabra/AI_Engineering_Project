@@ -30,7 +30,7 @@ def router(state: AgentState, config: dict) -> AgentState:
     state.setdefault("regens", 0)
     state.setdefault("usage", {})
 
-    out = ctx.llm.chat_json(prompts.ROUTER_SYS, prompts.router_user(question))
+    out = ctx.llm.chat_json(prompts.ROUTER_SYS, prompts.router_user(question), temperature=0.0)
     _accum_usage(state, out)
     route = out["data"].get("route", "single_rule")
     if route not in ("single_rule", "precedent", "out_of_scope"):
@@ -50,7 +50,11 @@ def router(state: AgentState, config: dict) -> AgentState:
 
 
 def retrieve(state: AgentState, config: dict) -> AgentState:
-    from app.retrieval.hybrid import expand_to_parents, hybrid_retrieve
+    from app.retrieval.hybrid import (
+        detect_grand_prix,
+        expand_to_parents,
+        hybrid_retrieve,
+    )
 
     ctx = ctx_from_config(config)
     cfg = state.get("config", {})
@@ -59,9 +63,13 @@ def retrieve(state: AgentState, config: dict) -> AgentState:
     candidate_k = cfg.get("candidate_k", ctx.settings.candidate_k)
     table = cfg.get("table", ctx.embedder.table)
 
-    filters = None
-    if state.get("route") == "precedent" and cfg.get("filters"):
-        filters = cfg["filters"]
+    # Scope to the Grand Prix named in the question (if any) so the many near-identical
+    # session-result chunks from other races don't crowd retrieval. Keeps global regs.
+    filters = dict(cfg.get("filters") or {})
+    gp = detect_grand_prix(state.get("query_text") or state["question"])
+    if gp and "grand_prix" not in filters:
+        filters["grand_prix"] = gp
+    filters = filters or None
 
     query = state["query_text"]
     query_vec = None
@@ -93,7 +101,9 @@ def grade(state: AgentState, config: dict) -> AgentState:
         state["grade"] = 0.0
         state["grade_missing"] = "no documents retrieved"
         return state
-    out = ctx.llm.chat_json(prompts.GRADER_SYS, prompts.grader_user(state["question"], docs))
+    out = ctx.llm.chat_json(
+        prompts.GRADER_SYS, prompts.grader_user(state["question"], docs), temperature=0.0
+    )
     _accum_usage(state, out)
     try:
         state["grade"] = max(0.0, min(1.0, float(out["data"].get("grade", 0.0))))
