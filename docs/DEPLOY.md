@@ -105,6 +105,25 @@ at `https://<DOMAIN>/dashboard`.
 To update later: `git pull && make prod-up` (and `make prod-ingest` after new races, or
 `make update GP=<slug>` — see the README).
 
+## Automatic updates (cron)
+
+To keep the knowledge base current with **no manual action**, schedule the bundled
+script — it scrapes the current season's newly published FIA documents and ingests
+them (idempotent; already-seen docs are skipped). On the droplet:
+
+```bash
+crontab -e
+# add, e.g., every Monday 06:00 UTC (adjust the repo path):
+0 6 * * 1  /root/f1/scripts/cron-update.sh >> /var/log/f1-autoupdate.log 2>&1
+```
+
+`SEASON` defaults to the current calendar year, so it rolls into 2027+ on its own (the
+scraper resolves each season from the FIA site). New races become searchable on the
+live site automatically — no redeploy. Watch it with `tail -f /var/log/f1-autoupdate.log`.
+
+> Note: this updates **data** only. Code/feature changes still ship via `git pull &&
+> make prod-up`.
+
 ---
 
 ## What's hardened for public exposure

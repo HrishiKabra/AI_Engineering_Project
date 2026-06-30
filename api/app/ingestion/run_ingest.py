@@ -101,16 +101,21 @@ def ingest(
             stats["seen"] += 1
 
             doc_id, changed = upsert_document(conn, meta, force=force)
+
+            # A superseded championship snapshot (a newer one exists this season):
+            # drop any standings chunks it left behind so only the latest remains.
+            if meta.doc_subtype == CHAMPIONSHIP_SUBTYPE and pdf not in latest_champ:
+                with conn.cursor() as cur:
+                    cur.execute("DELETE FROM chunks WHERE document_id = %s", (doc_id,))
+                conn.commit()
+                stats["skipped"] += 1
+                continue
+
             if not changed:
                 stats["skipped"] += 1
                 continue
 
-            if meta.is_table_only or (
-                meta.doc_subtype == CHAMPIONSHIP_SUBTYPE and pdf not in latest_champ
-            ):
-                rows = []  # skip: administrative table, or a superseded standings snapshot
-            else:
-                rows = _parse_document(meta, text, pdf)
+            rows = [] if meta.is_table_only else _parse_document(meta, text, pdf)
             chunk_ids = upsert_chunks(conn, doc_id, rows)
             stats["chunks"] += len(rows)
 
